@@ -341,8 +341,10 @@ fn open_cursor_login_url(url: &str) -> anyhow::Result<()> {
     let status = if cfg!(target_os = "macos") {
         std::process::Command::new("open").arg(url).status()?
     } else if cfg!(target_os = "windows") {
-        std::process::Command::new("cmd")
-            .args(["/c", "start", "", url])
+        // rundll32's FileProtocolHandler takes the whole URL as one argument;
+        // `cmd /C start` truncates it at the first unquoted `&`.
+        std::process::Command::new("rundll32")
+            .args(["url.dll,FileProtocolHandler", url])
             .status()?
     } else {
         std::process::Command::new("xdg-open").arg(url).status()?

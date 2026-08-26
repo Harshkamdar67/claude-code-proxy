@@ -285,8 +285,14 @@ fn open_browser(url: &str) {
     let command = ("open", vec![url]);
     #[cfg(target_os = "linux")]
     let command = ("xdg-open", vec![url]);
+    // Delegate to rundll32's FileProtocolHandler instead of `cmd /C start`.
+    // cmd splits its command line at the first unquoted `&`, truncating OAuth
+    // authorize URLs after response_type (x.ai then rejects the login with
+    // "Missing or invalid client_id"), and explorer.exe silently drops URLs
+    // that carry a query string. FileProtocolHandler takes the whole URL as
+    // one argument and hands it to the default browser with no shell between.
     #[cfg(target_os = "windows")]
-    let command = ("cmd", vec!["/C", "start", "", url]);
+    let command = ("rundll32", vec!["url.dll,FileProtocolHandler", url]);
     #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
     {
         let _ = std::process::Command::new(command.0)
