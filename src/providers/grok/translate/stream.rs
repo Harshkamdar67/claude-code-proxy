@@ -360,16 +360,19 @@ fn render(out: &mut Vec<u8>, event: ReducerEvent, search_blocks: GrokSearchBlock
         }
         ReducerEvent::Finish {
             stop_reason,
+            input_tokens,
             output_tokens,
             web_search_requests,
             x_search_requests,
-            ..
         } => {
             let hosted_search_requests = web_search_requests + x_search_requests;
             emit(
                 out,
                 "message_delta",
-                serde_json::json!({"type":"message_delta","delta":{"stop_reason":stop_reason,"stop_sequence":null},"usage":{"output_tokens":output_tokens,"server_tool_use":{"web_search_requests":hosted_search_requests,"x_search_requests":x_search_requests}}}),
+                // message_start cannot carry the prompt size because xAI only reports
+                // it when the response completes, so it is reported here. Without
+                // it every Grok turn looks like it read nothing.
+                serde_json::json!({"type":"message_delta","delta":{"stop_reason":stop_reason,"stop_sequence":null},"usage":{"input_tokens":input_tokens,"output_tokens":output_tokens,"server_tool_use":{"web_search_requests":hosted_search_requests,"x_search_requests":x_search_requests}}}),
             );
             emit(
                 out,
@@ -383,6 +386,30 @@ fn render(out: &mut Vec<u8>, event: ReducerEvent, search_blocks: GrokSearchBlock
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn message_delta_reports_the_prompt_size() {
+        // xAI only reports the prompt size when the response completes, so
+        // message_start cannot carry it and it has to arrive in the delta.
+        // Without it a caller reading usage sees every Grok turn as having
+        // read nothing, which is what Airlock's session totals showed.
+        let mut renderer = StreamTranslator::new("msg_1".into(), "grok-4.6".into());
+        let rendered = renderer
+            .render(vec![ReducerEvent::Finish {
+                stop_reason: "end_turn".into(),
+                input_tokens: 4321,
+                output_tokens: 12,
+                web_search_requests: 0,
+                x_search_requests: 0,
+            }])
+            .expect("render");
+        let text = String::from_utf8(rendered).expect("utf-8");
+        assert!(
+            text.contains("\"input_tokens\":4321"),
+            "delta must carry the prompt size: {text}"
+        );
+        assert!(text.contains("\"output_tokens\":12"), "{text}");
+    }
 
     #[test]
     fn decoder_accepts_every_boundary_and_line_ending() {

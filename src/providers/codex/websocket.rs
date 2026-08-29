@@ -4229,9 +4229,13 @@ mod tests {
             }
         });
 
+        // The window has to be wide enough that several keepalive ticks land
+        // and are counted before it expires. At 50ms against a 10ms interval
+        // the margin was under five ticks, which a loaded machine misses, so
+        // the test failed for scheduling reasons rather than behaviour.
         let error = match collect_ws_events_with_keepalive_interval(
             &mut client,
-            50,
+            400,
             None,
             None,
             None,
