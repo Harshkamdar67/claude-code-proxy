@@ -12,6 +12,35 @@ pub struct BackoffOutcome {
     pub exceeds_budget: bool,
 }
 
+/// How many retries a rate limit is worth before it is surfaced.
+///
+/// Retrying is right when this proxy is the only thing between the client
+/// and the provider. It is wrong when the caller has its own failover: a
+/// session router with a healthy alternative model already chosen pays the
+/// whole backoff for nothing, and the user waits minutes for a switch that
+/// was ready immediately. `CCP_MAX_RATE_LIMIT_RETRIES` lets such a caller
+/// lower the budget. Absent, unparsable, or larger than the default leaves
+/// the previous behaviour untouched.
+pub fn rate_limit_retry_budget(default_retries: u32) -> u32 {
+    parse_rate_limit_budget(
+        std::env::var("CCP_MAX_RATE_LIMIT_RETRIES").ok().as_deref(),
+        default_retries,
+    )
+}
+
+/// The parsing half, kept separate so it can be tested without the process
+/// environment, which tests share.
+pub fn parse_rate_limit_budget(raw: Option<&str>, default_retries: u32) -> u32 {
+    raw.and_then(|value| value.trim().parse::<u32>().ok())
+        .map(|value| value.min(default_retries))
+        .unwrap_or(default_retries)
+}
+
+/// True for the statuses that mean "busy", as opposed to "broken".
+pub fn is_rate_limit_status(status: u16) -> bool {
+    matches!(status, 429 | 529)
+}
+
 pub fn should_retry_status(status: u16) -> bool {
     matches!(status, 429 | 500 | 502 | 503 | 504)
 }
@@ -79,4 +108,36 @@ where
         }
     }
     unreachable!()
+}
+
+#[cfg(test)]
+mod rate_limit_budget_tests {
+    use super::{is_rate_limit_status, parse_rate_limit_budget};
+
+    #[test]
+    fn absent_or_unparsable_keeps_the_default() {
+        assert_eq!(parse_rate_limit_budget(None, 3), 3);
+        assert_eq!(parse_rate_limit_budget(Some(""), 3), 3);
+        assert_eq!(parse_rate_limit_budget(Some("not a number"), 3), 3);
+        assert_eq!(parse_rate_limit_budget(Some("-1"), 3), 3);
+    }
+
+    #[test]
+    fn a_caller_with_its_own_failover_can_opt_out() {
+        assert_eq!(parse_rate_limit_budget(Some("0"), 3), 0);
+        assert_eq!(parse_rate_limit_budget(Some(" 1 "), 3), 1);
+    }
+
+    #[test]
+    fn it_can_only_lower_the_budget_never_raise_it() {
+        assert_eq!(parse_rate_limit_budget(Some("99"), 3), 3);
+    }
+
+    #[test]
+    fn only_busy_statuses_count_as_rate_limits() {
+        assert!(is_rate_limit_status(429));
+        assert!(is_rate_limit_status(529));
+        assert!(!is_rate_limit_status(500));
+        assert!(!is_rate_limit_status(402));
+    }
 }

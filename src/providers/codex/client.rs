@@ -6,7 +6,10 @@ use crate::config;
 use crate::logging::create_logger;
 use crate::provider::RequestContext;
 use crate::request_identity::ConversationIdentity;
-use crate::retry::{compute_backoff_delay, should_retry_status, sleep};
+use crate::retry::{
+    compute_backoff_delay, is_rate_limit_status, rate_limit_retry_budget, should_retry_status,
+    sleep,
+};
 use crate::traffic::TrafficCapture;
 
 use super::auth::constants::{CODEX_API_ENDPOINT, ORIGINATOR, RESPONSES_LITE_ORIGINATOR};
@@ -512,6 +515,18 @@ impl std::ops::Deref for OwnerAwareCodexResponse {
 
 const MAX_BUFFERED_TRANSPORT_RETRIES: u32 = 3;
 const MAX_BUFFERED_TRANSPORT_ATTEMPTS: u32 = MAX_BUFFERED_TRANSPORT_RETRIES + 1;
+
+// Retries worth spending on this status. A rate limit is capped by
+// CCP_MAX_RATE_LIMIT_RETRIES so a caller with its own failover can stop
+// paying a backoff it does not need; everything else keeps the full budget,
+// because a dropped connection has no alternative to switch to.
+fn retry_budget_for(status: u16) -> u32 {
+    if is_rate_limit_status(status) {
+        rate_limit_retry_budget(MAX_BUFFERED_TRANSPORT_RETRIES)
+    } else {
+        MAX_BUFFERED_TRANSPORT_RETRIES
+    }
+}
 const HTTP_RESPONSE_BODY_IDLE_TIMEOUT_MS: u64 = 300_000;
 const IMAGE_HEADER_TIMEOUT_MS: u64 = 300_000;
 
@@ -1093,7 +1108,7 @@ impl CodexHttpClient {
                 continue;
             }
             if should_retry_codex_status(response.status)
-                && retries < MAX_BUFFERED_TRANSPORT_RETRIES
+                && retries < retry_budget_for(response.status)
             {
                 let retry_after = response
                     .headers
@@ -1816,7 +1831,7 @@ impl CodexHttpClient {
                         .iter()
                         .find(|(k, _)| k.to_lowercase() == "retry-after")
                         .map(|(_, v)| v.clone());
-                    if transport_failures < MAX_BUFFERED_TRANSPORT_RETRIES {
+                    if transport_failures < retry_budget_for(429) {
                         let delay =
                             compute_backoff_delay(transport_failures, retry_after.as_deref());
                         if delay.exceeds_budget {
@@ -1859,7 +1874,7 @@ impl CodexHttpClient {
                     });
                 }
                 Ok(response) if should_retry_codex_status(response.status) => {
-                    if transport_failures < MAX_BUFFERED_TRANSPORT_RETRIES {
+                    if transport_failures < retry_budget_for(response.status) {
                         let retry_after = response
                             .headers
                             .iter()
