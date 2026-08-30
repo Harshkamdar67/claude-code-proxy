@@ -1791,6 +1791,7 @@ impl CodexHttpClient {
                 log_buffered_retry_exhausted(
                     ctx,
                     transport,
+                    transport_failures + 1,
                     failure.status,
                     "upstream_event",
                     &failure.message,
@@ -1861,6 +1862,7 @@ impl CodexHttpClient {
                     log_buffered_retry_exhausted(
                         ctx,
                         transport,
+                        transport_failures + 1,
                         response.status,
                         "upstream",
                         "rate limited",
@@ -1900,6 +1902,7 @@ impl CodexHttpClient {
                     log_buffered_retry_exhausted(
                         ctx,
                         transport,
+                        transport_failures + 1,
                         response.status,
                         "upstream",
                         "retryable upstream status",
@@ -1942,6 +1945,7 @@ impl CodexHttpClient {
                         log_buffered_retry_exhausted(
                             ctx,
                             transport,
+                            transport_failures + 1,
                             err.status,
                             codex_error_origin_name(err.origin),
                             &err.message,
@@ -2859,6 +2863,7 @@ fn log_buffered_retry(
 fn log_buffered_retry_exhausted(
     ctx: &RequestContext,
     transport: crate::config::CodexTransport,
+    attempts: u32,
     status: u16,
     origin: &str,
     reason: &str,
@@ -2866,10 +2871,11 @@ fn log_buffered_retry_exhausted(
     let mut fields = serde_json::Map::new();
     fields.insert("reqId".into(), serde_json::json!(ctx.req_id));
     fields.insert("transport".into(), serde_json::json!(transport.as_str()));
-    fields.insert(
-        "attempts".into(),
-        serde_json::json!(MAX_BUFFERED_TRANSPORT_ATTEMPTS),
-    );
+    // The count that actually happened. This reported the ceiling instead,
+    // which reads like a measurement and is not one: a request that gave up
+    // after a single try still logged four, hiding whether a lowered
+    // rate-limit budget was in effect at all.
+    fields.insert("attempts".into(), serde_json::json!(attempts));
     fields.insert("status".into(), serde_json::json!(status));
     fields.insert("origin".into(), serde_json::json!(origin));
     fields.insert("reason".into(), serde_json::json!(reason));
