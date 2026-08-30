@@ -520,6 +520,17 @@ const MAX_BUFFERED_TRANSPORT_ATTEMPTS: u32 = MAX_BUFFERED_TRANSPORT_RETRIES + 1;
 // CCP_MAX_RATE_LIMIT_RETRIES so a caller with its own failover can stop
 // paying a backoff it does not need; everything else keeps the full budget,
 // because a dropped connection has no alternative to switch to.
+// A retryable status can still carry a body that says the failure is
+// permanent. A context overflow arrives from Codex as HTTP 500 with the
+// reason only in the body, so the status alone says "try again" about a
+// request that cannot succeed however many times it is sent. Retrying it
+// costs the caller a full re-upload of an oversized payload per attempt,
+// and delays the compaction that would actually fix it. A body that does
+// not parse as a known failure leaves the decision exactly as it was.
+fn body_says_permanent(body: &[u8]) -> bool {
+    super::events::first_event_failure(body).is_some_and(|failure| !failure.retryable())
+}
+
 fn retry_budget_for(status: u16) -> u32 {
     if is_rate_limit_status(status) {
         rate_limit_retry_budget(MAX_BUFFERED_TRANSPORT_RETRIES)
@@ -1109,6 +1120,7 @@ impl CodexHttpClient {
             }
             if should_retry_codex_status(response.status)
                 && retries < retry_budget_for(response.status)
+                && !body_says_permanent(&response.body)
             {
                 let retry_after = response
                     .headers
@@ -3029,6 +3041,42 @@ fn should_reset_websocket_pool(
         return false;
     };
     reason != "disabled"
+}
+
+#[cfg(test)]
+mod permanent_body_tests {
+    use super::body_says_permanent;
+
+    fn sse(payload: &str) -> Vec<u8> {
+        format!("data: {payload}
+
+").into_bytes()
+    }
+
+    #[test]
+    fn a_context_overflow_is_not_worth_retrying() {
+        // Codex reports this as HTTP 500, which reads as retryable, while the
+        // body says the input cannot fit. Measured at four uploads of an 8 MB
+        // payload and 55 seconds before the caller saw it.
+        let body = sse(
+            r#"{"type":"error","error":{"type":"invalid_request_error","message":"Your input exceeds the context window of this model."}}"#,
+        );
+        assert!(body_says_permanent(&body));
+    }
+
+    #[test]
+    fn a_genuine_transient_failure_still_retries() {
+        let body = sse(
+            r#"{"type":"error","error":{"type":"server_error","code":"server_is_overloaded","message":"try again"}}"#,
+        );
+        assert!(!body_says_permanent(&body));
+    }
+
+    #[test]
+    fn an_unparsable_body_changes_nothing() {
+        assert!(!body_says_permanent(b"not sse at all"));
+        assert!(!body_says_permanent(b""));
+    }
 }
 
 #[cfg(test)]
