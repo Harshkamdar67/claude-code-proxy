@@ -3,6 +3,12 @@ title: Changelog
 description: Release notes for claude-code-proxy.
 ---
 
+## v0.1.35-airlock.4 (2026-09-23)
+
+- Allow exact `gpt-6-sol` and `gpt-6-luna` requests, including their Fast
+  variants, through the Codex subscription route. Keep older model IDs valid.
+- Recognize `claude-opus-5-5` as a direct-proxy alias for `gpt-6-sol`.
+
 ## v0.1.35 (2026-08-19)
 
 - Grok web search works reliably with Claude Code, preserves other tools, and

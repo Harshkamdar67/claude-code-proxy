@@ -15,6 +15,8 @@ pub const ALLOWED_MODELS: &[&str] = &[
     "gpt-5.6-sol",
     "gpt-5.6-terra",
     "gpt-6-astra",
+    "gpt-6-sol",
+    "gpt-6-luna",
 ];
 
 pub const MODEL_ALIASES: &[(&str, &str)] = &[
@@ -28,6 +30,7 @@ pub const MODEL_ALIASES: &[(&str, &str)] = &[
     ("claude-opus-4-7", "gpt-5.6-sol"),
     ("claude-opus-4-8", "gpt-5.6-sol"),
     ("claude-opus-5", "gpt-5.6-sol"),
+    ("claude-opus-5-5", "gpt-6-sol"),
     ("fable", "gpt-5.6-sol"),
     ("claude-fable-5", "gpt-5.6-sol"),
 ];
@@ -120,7 +123,12 @@ pub fn assert_allowed_model(model: &str) -> Result<(), ModelNotAllowedError> {
 pub fn uses_responses_lite(model: &str) -> bool {
     matches!(
         model,
-        "gpt-5.6-luna" | "gpt-5.6-sol" | "gpt-5.6-terra" | "gpt-6-astra"
+        "gpt-5.6-luna"
+            | "gpt-5.6-sol"
+            | "gpt-5.6-terra"
+            | "gpt-6-astra"
+            | "gpt-6-sol"
+            | "gpt-6-luna"
     )
 }
 
@@ -189,6 +197,7 @@ mod tests {
             let r = resolve_model_request(model);
             assert_eq!(r.model, "gpt-5.6-sol");
         }
+        assert_eq!(resolve_model_request("claude-opus-5-5").model, "gpt-6-sol");
     }
 
     #[test]
@@ -204,6 +213,9 @@ mod tests {
         let r = resolve_model_request("gpt-5.6-sol-fast");
         assert_eq!(r.model, "gpt-5.6-sol");
         assert_eq!(r.service_tier, Some(ServiceTier::Priority));
+        let next = resolve_model_request("gpt-6-sol-fast");
+        assert_eq!(next.model, "gpt-6-sol");
+        assert_eq!(next.service_tier, Some(ServiceTier::Priority));
     }
 
     #[test]
@@ -212,6 +224,10 @@ mod tests {
         assert!(assert_allowed_model("gpt-5.6-sol").is_ok());
         assert!(assert_allowed_model("gpt-5.6-terra").is_ok());
         assert!(assert_allowed_model("gpt-6-astra").is_ok());
+        assert!(assert_allowed_model("gpt-6-sol").is_ok());
+        assert!(assert_allowed_model("gpt-6-luna").is_ok());
+        assert!(uses_responses_lite("gpt-6-sol"));
+        assert!(uses_responses_lite("gpt-6-luna"));
         assert!(assert_allowed_model("gpt-5.6-luna").is_ok());
     }
 
