@@ -3,11 +3,14 @@ title: Changelog
 description: Release notes for claude-code-proxy.
 ---
 
-## v0.1.35-airlock.4 (2026-09-23)
+## v0.1.35-airlock.5 (2026-09-23)
 
 - Allow exact `gpt-6-sol` and `gpt-6-luna` requests, including their Fast
   variants, through the Codex subscription route. Keep older model IDs valid.
 - Recognize `claude-opus-5-5` as a direct-proxy alias for `gpt-6-sol`.
+- Serialize Cursor bridge integration tests that clear a shared registry; the
+  first tagged CI build stopped on their parallel test race and published no
+  artifacts.
 
 ## v0.1.35 (2026-08-19)
 

@@ -16,6 +16,7 @@ use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
 static ENV_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+static BRIDGE_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
 // ---------------------------------------------------------------------------
 // Prost roundtrip
@@ -1074,6 +1075,7 @@ async fn cursor_proxy_http_path_reaches_mock_cursor_upstream() {
 fn bridge_start_pauses_on_tool_use_xml() {
     use claude_code_proxy::providers::cursor::response::*;
     use claude_code_proxy::providers::cursor::tool_bridge::*;
+    let _lock = BRIDGE_LOCK.lock().unwrap();
 
     // Create upstream events with a text delta containing XML tool_use
     let events = vec![
@@ -1149,6 +1151,7 @@ fn bridge_start_pauses_on_tool_use_xml() {
 fn bridge_start_passes_through_without_tool_use() {
     use claude_code_proxy::providers::cursor::response::*;
     use claude_code_proxy::providers::cursor::tool_bridge::*;
+    let _lock = BRIDGE_LOCK.lock().unwrap();
 
     let events = vec![
         CursorStreamEvent::TextDelta {
@@ -1199,6 +1202,7 @@ fn bridge_start_passes_through_without_tool_use() {
 fn bridge_start_creates_pending_tool_in_registry() {
     use claude_code_proxy::providers::cursor::response::*;
     use claude_code_proxy::providers::cursor::tool_bridge::*;
+    let _lock = BRIDGE_LOCK.lock().unwrap();
 
     // Clean state
     BridgeRegistry::clear();
@@ -1231,6 +1235,7 @@ fn bridge_start_creates_pending_tool_in_registry() {
 fn bridge_resume_continues_after_tool_use_pause() {
     use claude_code_proxy::providers::cursor::response::*;
     use claude_code_proxy::providers::cursor::tool_bridge::*;
+    let _lock = BRIDGE_LOCK.lock().unwrap();
 
     BridgeRegistry::clear();
 
@@ -1333,6 +1338,7 @@ fn bridge_resume_continues_after_tool_use_pause() {
 fn bridge_rejects_tool_not_in_allowed_list() {
     use claude_code_proxy::providers::cursor::response::*;
     use claude_code_proxy::providers::cursor::tool_bridge::*;
+    let _lock = BRIDGE_LOCK.lock().unwrap();
 
     BridgeRegistry::clear();
 
