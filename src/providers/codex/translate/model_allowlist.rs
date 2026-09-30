@@ -16,6 +16,7 @@ pub const ALLOWED_MODELS: &[&str] = &[
     "gpt-5.6-terra",
     "gpt-6-astra",
     "gpt-6-sol",
+    "gpt-6.1-sol",
     "gpt-6-luna",
 ];
 
@@ -128,6 +129,7 @@ pub fn uses_responses_lite(model: &str) -> bool {
             | "gpt-5.6-terra"
             | "gpt-6-astra"
             | "gpt-6-sol"
+            | "gpt-6.1-sol"
             | "gpt-6-luna"
     )
 }
@@ -234,5 +236,22 @@ mod tests {
     #[test]
     fn not_allowed_rejected() {
         assert!(assert_allowed_model("gpt-7").is_err());
+    }
+
+    #[test]
+    fn gpt_6_1_sol_preserves_exact_identity_and_subscription_lane() {
+        let resolved = resolve_model_request("gpt-6.1-sol");
+        assert_eq!(resolved.model, "gpt-6.1-sol");
+        assert_eq!(resolved.service_tier, None);
+        assert!(assert_allowed_model(&resolved.model).is_ok());
+        assert!(is_valid_model_for_codex("gpt-6.1-sol"));
+        assert!(uses_responses_lite("gpt-6.1-sol"));
+        assert_eq!(full_lane_web_search_model("gpt-6.1-sol"), "gpt-6.1-sol");
+        let fast = resolve_model_request("gpt-6.1-sol-fast");
+        assert_eq!(fast.model, "gpt-6.1-sol");
+        assert_eq!(fast.service_tier, Some(ServiceTier::Priority));
+        assert!(is_valid_model_for_codex("gpt-6.1-sol-fast"));
+        assert!(assert_allowed_model("gpt-6-sol").is_ok());
+        assert!(!is_valid_model_for_codex("gpt-6.1-sol-ultra"));
     }
 }
