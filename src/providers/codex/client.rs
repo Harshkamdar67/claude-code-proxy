@@ -3048,9 +3048,12 @@ mod permanent_body_tests {
     use super::body_says_permanent;
 
     fn sse(payload: &str) -> Vec<u8> {
-        format!("data: {payload}
+        format!(
+            "data: {payload}
 
-").into_bytes()
+"
+        )
+        .into_bytes()
     }
 
     #[test]
