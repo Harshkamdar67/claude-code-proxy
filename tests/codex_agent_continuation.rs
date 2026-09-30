@@ -538,7 +538,7 @@ async fn emit_completion(
     websocket: &mut WebSocketStream<TcpStream>,
     response_id: &str,
     text: &str,
-) -> Result<(), tokio_tungstenite::tungstenite::Error> {
+) -> anyhow::Result<()> {
     let events = [
         json!({
             "type": "response.output_item.added",
